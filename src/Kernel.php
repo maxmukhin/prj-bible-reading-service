@@ -32,44 +32,22 @@ class Kernel extends BaseKernel
         ]);
 
         $services = $container->services()
-            ->defaults()->autowire()->autoconfigure();
+            ->defaults()
+            ->autowire()
+            ->autoconfigure();
 
-        // 1. Регистрируем наши конкретные классы
-        $services->set(\App\Infrastructure\Persistence\SqliteUserRepository::class);
-        $services->set(\App\Application\UseCase\RegisterUserUseCase::class);
-        $services->set(\App\Presentation\Controller\AuthController::class)->public();
-        $services->set(\App\Infrastructure\Persistence\SqliteNoteRepository::class);
-        $services->set(\App\Application\UseCase\CreateNoteUseCase::class);
-        $services->set(\App\Infrastructure\Persistence\SqliteBibleRepository::class);
-        $services->set(\App\Presentation\Controller\BibleController::class)->public();
+        // 1. Загружаем все сервисы (Репозитории, UseCases, Презентеры) как приватные
+        $services->load('App\\', '../src/*')
+            ->exclude([
+                '../src/Domain/Model',
+                '../src/Presentation/Controller', // Исключаем контроллеры отсюда
+                '../src/Kernel.php',
+            ]);
 
-        $services->set(\App\Presentation\Controller\HtmxNoteController::class)->public();
-        $services->set(\App\Application\UseCase\UpdateNoteUseCase::class);
-
-        $services->set(\App\Infrastructure\Persistence\SqliteFriendshipRepository::class);
-        $services->set(\App\Presentation\View\BibleHtmlRenderer::class);
-        $services->set(\App\Presentation\Controller\HtmxFriendController::class)->public();
-
-        $services->set(\App\Application\UseCase\SaveNoteUseCase::class);
-
-
-        //
-        //$services->set(\App\Presentation\ApiController\ApiNoteController::class)->public();
-
-        $services->alias(
-            \App\Domain\Repository\BibleRepositoryInterface::class,
-            \App\Infrastructure\Persistence\SqliteBibleRepository::class
-        );
-
-        $services->alias(
-            \App\Domain\Repository\NoteRepositoryInterface::class,
-            \App\Infrastructure\Persistence\SqliteNoteRepository::class
-        );
-
-        $services->alias(
-            \App\Domain\Repository\UserRepositoryInterface::class,
-            \App\Infrastructure\Persistence\SqliteUserRepository::class
-        );
+        // 2. Загружаем контроллеры отдельно, автоматически помечая их правильным тегом
+        $services->load('App\\Presentation\\Controller\\', '../src/Presentation/Controller/*')
+            ->tag('controller.service_arguments')
+            ->public();
     }
 
     protected function configureRoutes(RoutingConfigurator $routes): void

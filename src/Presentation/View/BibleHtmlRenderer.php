@@ -163,7 +163,7 @@ class BibleHtmlRenderer
     public function renderSingleNoteHtml(Note $note, bool $isMyNote): string
     {
         $id = $note->getId();
-        $content = nl2br(htmlspecialchars($note->getContent()));
+        $content = htmlspecialchars($note->getContent());
         $escapedContent = htmlspecialchars($note->getContent(), ENT_QUOTES, 'UTF-8');
         $verse = $note->getTarget()->getVerse();
 
@@ -172,17 +172,16 @@ class BibleHtmlRenderer
             $authorBadge = "";
             $editButton = "<button @click.stop='openEditModal(\"{$id}\")' class='hidden group-hover/note:inline-block text-[11px] text-blue-600 dark:text-blue-400 hover:underline ml-2 cursor-pointer font-semibold'>ред.</button>";
         } else {
-            // Стилизация заметок друзей (Фиолетовая тема)
             $class = 'friend-note';
-            // Обрезаем ID друга для аккуратного бейджа автора
             $shortId = substr($note->getUserId(), 0, 6);
             $authorBadge = "<span class='text-[10px] bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-300 font-bold px-1 py-0.2 rounded mr-1.5 uppercase tracking-wider'>Экзегет #{$shortId}</span>";
-            $editButton = ""; // Чужие заметки редактировать нельзя
+            $editButton = "";
         }
 
+        // ДОБАВИЛИ КЛАСС whitespace-pre-wrap НИЖЕ В СТРОКЕ SPAN
         return "
         <div id='note-item-{$id}' data-content='{$escapedContent}' data-verse='{$verse}' class='note-item {$class} flex justify-between items-start group/note'>
-            <span class='flex-1 break-words text-slate-800 dark:text-slate-200'>{$authorBadge}{$content}</span>
+            <span class='flex-1 break-words whitespace-pre-wrap text-slate-800 dark:text-slate-200'>{$authorBadge}{$content}</span>
             {$editButton}
         </div>";
     }
