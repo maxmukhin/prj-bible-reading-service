@@ -5,13 +5,13 @@ namespace App\Application\UseCase;
 
 use App\Domain\Model\Note;
 use App\Domain\Model\NoteTarget;
-use App\Infrastructure\Persistence\SqliteNoteRepository;
+use App\Domain\Repository\NoteRepositoryInterface;
 use DateTimeImmutable;
 
 class SaveNoteUseCase
 {
     public function __construct(
-        private SqliteNoteRepository $noteRepository
+        private NoteRepositoryInterface $noteRepository
     ) {}
 
     /**
