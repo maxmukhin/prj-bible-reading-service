@@ -36,23 +36,49 @@ class SqliteNoteRepository implements NoteRepositoryInterface
 
     public function save(Note $note): void
     {
+        $target = $note->getTarget();
+
+        // Добавили target_type в список полей
         $stmt = $this->pdo->prepare("
             INSERT INTO notes (id, user_id, target_type, book_code, chapter, verse, content, created_at)
             VALUES (:id, :user_id, :target_type, :book_code, :chapter, :verse, :content, :created_at)
-            ON CONFLICT(id) DO UPDATE SET content = :content
         ");
-
-        $target = $note->getTarget();
 
         $stmt->execute([
             'id'          => $note->getId(),
             'user_id'     => $note->getUserId(),
-            'target_type' => $target->getType()->value,
-            'book_code'   => $target->getBookCode(),
+            'target_type' => $target->getTargetType(),
+            'book_code'   => strtoupper($target->getBookCode()),
             'chapter'     => $target->getChapter(),
             'verse'       => $target->getVerse(),
             'content'     => $note->getContent(),
-            'created_at'  => $note->getCreatedAt()->format(DATE_ATOM)
+            'created_at'  => $note->getCreatedAt()->format('Y-m-d H:i:s')
+        ]);
+    }
+
+    public function update(Note $note): void
+    {
+        $target = $note->getTarget();
+
+        // Добавили обновление target_type на случай, если тип привязки изменился
+        $stmt = $this->pdo->prepare("
+            UPDATE notes 
+            SET content = :content, 
+                target_type = :target_type,
+                book_code = :book_code, 
+                chapter = :chapter, 
+                verse = :verse
+            WHERE id = :id AND user_id = :user_id
+        ");
+
+        $stmt->execute([
+            'id'          => $note->getId(),
+            'user_id'     => $note->getUserId(),
+            'target_type' => $target->getTargetType(),
+            'book_code'   => strtoupper($target->getBookCode()),
+            'chapter'     => $target->getChapter(),
+            'verse'       => $target->getVerse(),
+            'content'     => $note->getContent()
         ]);
     }
 
@@ -92,23 +118,34 @@ class SqliteNoteRepository implements NoteRepositoryInterface
      * Оптимизированный хелпер: получить ВСЕ заметки пользователя для конкретной главы
      * (и уровня главы, и уровня конкретных стихов), чтобы не делать по 30 запросов на страницу.
      */
-    public function findAllForChapterView(string $userId, string $bookCode, int $chapter): array
+    public function findAllForChapterView(string $userId, string $bookCode, int $chapter, array $friendIds = []): array
     {
-        $stmt = $this->pdo->prepare("
-            SELECT * FROM notes 
-            WHERE user_id = :user_id 
-              AND book_code = :book_code 
-              AND chapter = :chapter
-            ORDER BY verse ASC, created_at DESC
-        ");
+        $allowedUserIds = array_merge([$userId], $friendIds);
+        // Генерируем плейсхолдеры (?,?,?) для безопасного IN-запроса
+        $placeholders = implode(',', array_fill(0, count($allowedUserIds), '?'));
 
-        $stmt->execute([
-            'user_id'   => $userId,
-            'book_code' => strtoupper($bookCode),
-            'chapter'   => $chapter
-        ]);
+        $sql = "SELECT id, user_id, book_code, chapter, verse, content, created_at 
+                FROM notes 
+                WHERE book_code = ? AND chapter = ? AND user_id IN ($placeholders)
+                ORDER BY verse ASC, created_at ASC";
 
-        return array_map([$this, 'mapRowToNote'], $stmt->fetchAll());
+        $stmt = $this->pdo->prepare($sql);
+
+        $params = array_merge([strtoupper($bookCode), $chapter], $allowedUserIds);
+        $stmt->execute($params);
+
+        $notes = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $notes[] = new \App\Domain\Model\Note(
+                $row['id'],
+                $row['user_id'],
+                new \App\Domain\Model\NoteTarget($row['book_code'], (int)$row['chapter'], $row['verse'] !== null ? (int)$row['verse'] : null),
+                $row['content'],
+                new \DateTimeImmutable($row['created_at'])
+            );
+        }
+
+        return $notes;
     }
 
     public function findByUsersAndTarget(array $userIds, BibleTarget $target): array

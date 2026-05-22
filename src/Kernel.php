@@ -46,6 +46,13 @@ class Kernel extends BaseKernel
         $services->set(\App\Presentation\Controller\HtmxNoteController::class)->public();
         $services->set(\App\Application\UseCase\UpdateNoteUseCase::class);
 
+        $services->set(\App\Infrastructure\Persistence\SqliteFriendshipRepository::class);
+        $services->set(\App\Presentation\View\BibleHtmlRenderer::class);
+        $services->set(\App\Presentation\Controller\HtmxFriendController::class)->public();
+
+        $services->set(\App\Application\UseCase\SaveNoteUseCase::class);
+
+
         //
         //$services->set(\App\Presentation\ApiController\ApiNoteController::class)->public();
 
