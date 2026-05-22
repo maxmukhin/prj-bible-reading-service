@@ -43,6 +43,11 @@ class Kernel extends BaseKernel
         $services->set(\App\Infrastructure\Persistence\SqliteBibleRepository::class);
         $services->set(\App\Presentation\Controller\BibleController::class)->public();
 
+        $services->set(\App\Presentation\Controller\HtmxNoteController::class)->public();
+        $services->set(\App\Application\UseCase\UpdateNoteUseCase::class);
+
+        //
+        //$services->set(\App\Presentation\ApiController\ApiNoteController::class)->public();
 
         $services->alias(
             \App\Domain\Repository\BibleRepositoryInterface::class,
