@@ -1,14 +1,14 @@
 <?php
 namespace App\Presentation\Controller;
 
-use App\Infrastructure\Persistence\SqliteFriendshipRepository;
+use App\Domain\Repository\FriendRequestRepositoryInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 class HtmxFriendController
 {
-    public function __construct(private SqliteFriendshipRepository $friendshipRepository) {}
+    public function __construct(private FriendRequestRepositoryInterface $friendshipRepository) {}
 
     #[Route('/htmx/friends/add', name: 'htmx_friend_add', methods: ['POST'])]
     public function add(Request $request): Response

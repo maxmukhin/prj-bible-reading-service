@@ -2,8 +2,8 @@
 namespace App\Presentation\Controller;
 
 use App\Domain\Repository\BibleRepositoryInterface;
-use App\Infrastructure\Persistence\SqliteNoteRepository;
-use App\Infrastructure\Persistence\SqliteFriendshipRepository;
+use App\Domain\Repository\FriendRequestRepositoryInterface;
+use App\Domain\Repository\NoteRepositoryInterface;
 use App\Presentation\View\BibleHtmlRenderer;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,8 +13,8 @@ class BibleController
 {
     public function __construct(
         private BibleRepositoryInterface $bibleRepository,
-        private SqliteNoteRepository $noteRepository,
-        private SqliteFriendshipRepository $friendshipRepository,
+        private NoteRepositoryInterface $noteRepository,
+        private FriendRequestRepositoryInterface $friendshipRepository,
         private BibleHtmlRenderer $renderer
     ) {}
 

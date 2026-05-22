@@ -4,7 +4,7 @@
 namespace App\Presentation\Controller;
 
 use App\Application\UseCase\SaveNoteUseCase;
-use App\Infrastructure\Persistence\SqliteNoteRepository;
+use App\Domain\Repository\NoteRepositoryInterface;
 use App\Presentation\View\BibleHtmlRenderer;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,7 +14,7 @@ class HtmxNoteController
 {
     public function __construct(
         private SaveNoteUseCase $saveNoteUseCase,
-        private SqliteNoteRepository $noteRepository,
+        private NoteRepositoryInterface $noteRepository,
         private BibleHtmlRenderer $renderer
     ) {}
 

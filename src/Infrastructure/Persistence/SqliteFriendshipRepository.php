@@ -1,9 +1,10 @@
 <?php
 namespace App\Infrastructure\Persistence;
 
+use App\Domain\Repository\FriendRequestRepositoryInterface;
 use PDO;
 
-class SqliteFriendshipRepository
+class SqliteFriendshipRepository implements FriendRequestRepositoryInterface
 {
     private PDO $pdo;
 
