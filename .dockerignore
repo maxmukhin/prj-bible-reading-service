@@ -1,0 +1,14 @@
+.git
+.gitignore
+docker-compose.yml
+docker-compose.override.yml
+var/cache
+var/log
+var/data.db
+var/data.db-wal
+var/data.db-shm
+vendor/
+.env.local
+.env.local.php
+.env.*.local
+

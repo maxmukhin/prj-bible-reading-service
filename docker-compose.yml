@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  php:
+    image: bible-reading-service:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ${APP_ENV:-dev} # По умолчанию включаем dev-режим для разработки
+    ports:
+      - "${HTTP_PORT:-8000}:80"
+      - "${HTTPS_PORT:-8443}:443"
+      - "${HTTP3_PORT:-8443}:443/udp"
+    volumes:
+      # 1. Прямой маунт папки для SQLite. БД будет физически лежать в твоем проекте
+      - ./data:/app/data:rw
+
+      # 2. Маунт кода для live-reload (изменения в PHP будут видны сразу)
+      - .:/app:rw
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      APP_SECRET: ${APP_SECRET:-67f0fa236d8d32d0d0c67993a4a8db21}
+      # Перенаправляем путь к базе данных в нашу новую примонтированную папку
+      DATABASE_URL: "sqlite:///%kernel.project_dir%/data/bible.db"
+      CADDY_GLOBAL_OPTIONS: "local_certs"
+    restart: unless-stopped
+
+
