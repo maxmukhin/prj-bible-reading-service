@@ -5,30 +5,61 @@ use App\Domain\Model\Note;
 
 class BibleHtmlRenderer
 {
+    /**
+     * Точка входа для HTMX-контроллера
+     */
+    public function renderNotesListForTarget(array $notes, ?int $verse, ?string $userId): string
+    {
+        return $this->renderNotesWidget($notes, $verse, $userId);
+    }
+
+    /**
+     * ИЗОЛИРОВАННЫЙ ВИДЖЕТ ЗАМЕТОК (Единый источник правды для полного рендера и HTMX)
+     * @param Note[] $allNotes
+     */
+    public function renderNotesWidget(array $allNotes, ?int $verse, ?string $userId): string
+    {
+        $myNotes = [];
+        $friendsNotes = [];
+
+        foreach ($allNotes as $note) {
+            // Оставляем только те заметки, которые принадлежат целевому контексту (стиху или главе)
+            if ($note->getTarget()->getVerse() !== $verse) {
+                continue;
+            }
+
+            // Проверяем авторство
+            $isMyNote = ($userId && $note->getUserId() === $userId);
+
+            if ($isMyNote) {
+                $myNotes[] = $note;
+            } else {
+                $friendsNotes[] = $note;
+            }
+        }
+
+        $html = '';
+
+        // Сначала всегда выводим СВОИ заметки
+        foreach ($myNotes as $note) {
+            $html .= $this->renderSingleNoteHtml($note, true);
+        }
+
+        // Затем выводим ЗАМЕТКИ ДРУЗЕЙ
+        foreach ($friendsNotes as $note) {
+            $html .= $this->renderSingleNoteHtml($note, false);
+        }
+
+        return $html;
+    }
+
     public function render(
         string $version, string $bookCode, int $chapter, string $currentBookName,
         array $books, array $verses, array $allNotes, ?string $userId, bool $hasPrev, bool $hasNext
     ): string {
 
-        // Разделяем заметки на свои и заметки друзей
-        $myNotesByVerse = [];
-        $friendsNotesByVerse = [];
-        $chapterNotesHtml = '';
-
-        foreach ($allNotes as $note) {
-            $verseNum = $note->getTarget()->getVerse();
-            $isMyNote = ($userId && $note->getUserId() === $userId);
-
-            if ($verseNum !== null) {
-                if ($isMyNote) {
-                    $myNotesByVerse[$verseNum][] = $note;
-                } else {
-                    $friendsNotesByVerse[$verseNum][] = $note;
-                }
-            } else {
-                $chapterNotesHtml .= $this->renderSingleNoteHtml($note, $isMyNote);
-            }
-        }
+        // Рендерим заметки к главе (передаем null вместо номера стиха)
+        $chapterNotesHtml = $this->renderNotesWidget($allNotes, null, $userId);
 
         // 1. Рендеринг сетки книг
         $booksGridHtml = $this->renderBooksGrid($books, $bookCode, $version);
@@ -37,6 +68,10 @@ class BibleHtmlRenderer
         $versesHtml = '';
         foreach ($verses as $v) {
             $vNum = $v['verse'];
+
+            // Вызываем наш виджет прямо внутри цикла генерации стихов
+            $notesWidgetHtml = $this->renderNotesWidget($allNotes, $vNum, $userId);
+
             $versesHtml .= "
             <div class='verse-row group py-2 px-3 rounded-lg hover:bg-blue-50/40 dark:hover:bg-slate-800/30 transition relative mb-1'>
                 <p class='text-gray-900 dark:text-slate-200 leading-relaxed m-0'>
@@ -45,25 +80,16 @@ class BibleHtmlRenderer
                     </span>
                     <span id='verse-text-{$vNum}'>" . htmlspecialchars($v['text']) . "</span>
                 </p>
-                <div id='notes-container-{$vNum}' class='notes-list mt-1 space-y-1 pl-6'>";
-
-            // Сначала выводим свои заметки
-            if (isset($myNotesByVerse[$vNum])) {
-                foreach ($myNotesByVerse[$vNum] as $note) { $versesHtml .= $this->renderSingleNoteHtml($note, true); }
-            }
-            // Затем выводим заметки друзей
-            if (isset($friendsNotesByVerse[$vNum])) {
-                foreach ($friendsNotesByVerse[$vNum] as $note) { $versesHtml .= $this->renderSingleNoteHtml($note, false); }
-            }
-
-            $versesHtml .= "</div>
+                <div id='notes-container-{$vNum}' class='notes-list mt-1 space-y-1 pl-6'>
+                    {$notesWidgetHtml}
+                </div>
             </div>";
         }
 
         // 3. Навигация
         $navHtml = $this->renderNavigation($version, $bookCode, $chapter, $hasPrev, $hasNext);
 
-        // Возвращаем финальную сборку
+        // Возвращаем финальную сборку (остается без изменений)
         return $this->renderLayout("
             <div x-data='{ 
                 modalOpen: false, isAuthenticated: " . ($userId ? 'true' : 'false') . ", isEditMode: false,
@@ -86,13 +112,10 @@ class BibleHtmlRenderer
                     this.noteContent = el.getAttribute(\"data-content\"); this.modalOpen = true;
                 }
             }'>
-                <!-- Верхняя панель управления -->
                 <div class='flex justify-between items-center mb-6'>
                     <a href='/' class='text-sm text-blue-600 dark:text-blue-400 hover:underline'>&larr; На главную</a>
                     
                     <div class='flex items-center gap-3 text-xs text-gray-500 dark:text-slate-400'>
-                        
-                        <!-- Форма добавления друга по ID -->
                         " . ($userId ? "
                         <form hx-post='/htmx/friends/add' hx-swap='none' @htmx:after-request='if(event.detail.successful) alert(\"Друг успешно добавлен!\")' class='flex items-center gap-1 bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-lg p-1 shadow-sm'>
                             <input type='text' name='friend_id' placeholder='ID друга' required class='px-2 py-0.5 bg-transparent border-none text-xs focus:outline-none w-24 text-slate-800 dark:text-slate-200'>
@@ -132,7 +155,6 @@ class BibleHtmlRenderer
                     $navHtml
                 </div>
 
-                <!-- МОДАЛЬНОЕ ОКНО -->
                 <div x-show='modalOpen' class='fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm' style='display: none;' @keydown.escape.window='modalOpen = false'>
                     <div @click.away='modalOpen = false' class='bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-slate-800 w-full max-w-md overflow-hidden transform transition-all'>
                         <div class='bg-gray-50 dark:bg-slate-800/40 px-6 py-4 border-b dark:border-slate-800 flex justify-between items-center'>
@@ -178,7 +200,6 @@ class BibleHtmlRenderer
             $editButton = "";
         }
 
-        // ДОБАВИЛИ КЛАСС whitespace-pre-wrap НИЖЕ В СТРОКЕ SPAN
         return "
         <div id='note-item-{$id}' data-content='{$escapedContent}' data-verse='{$verse}' class='note-item {$class} flex justify-between items-start group/note'>
             <span class='flex-1 break-words whitespace-pre-wrap text-slate-800 dark:text-slate-200'>{$authorBadge}{$content}</span>
@@ -217,25 +238,58 @@ class BibleHtmlRenderer
     private function renderLayout(string $content): string
     {
         return "
-        <!DOCTYPE html>
-        <html lang='ru'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Экзегетический Дневник</title>
-            <script src='https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4'></script>
-            <script src='https://unpkg.com/htmx.org@1.9.10'></script>
-            <script defer src='https://unpkg.com/@alpinejs/collapse@3.x.x/dist/collapse.min.js'></script>
-            <script defer src='https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js'></script>
-            <style>
-                .note-item { font-size: 13px; border-radius: 6px; padding: 6px 12px; margin-top: 4px; border-left-width: 4px; }
-                .verse-note { background-color: #f0fdf4; border-left-color: #22c55e; color: #166534; }
-                .chapter-note { background-color: #fef9c3; border-left-color: #eab308; color: #713f12; font-size: 14px; padding: 10px; border-radius: 8px; }
-                .friend-note { background-color: #f3e8ff; border-left-color: #a855f7; color: #581c87; }
-                .dark .verse-note { background-color: rgba(34, 197, 94, 0.15) !important; border-left-color: #4ade80 !important; color: #86efac !important; }
-                .dark .chapter-note { background-color: rgba(234, 179, 8, 0.15) !important; border-left-color: #fde047 !important; color: #fef08a !important; }
-                .dark .friend-note { background-color: rgba(168, 85, 247, 0.15) !important; border-left-color: #c084fc !important; color: #e9d5ff !important; }
-            </style>
-        </head>
-        <body x-data=\"{ darkMode: localStorage.getItem('darkMode') === 'true', toggleDark() { this.darkMode = !this.darkMode; localStorage.setItem('darkMode', this.darkMode); } }\" :class=\"darkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'\" class='font-sans antialiased min-h-screen py-10 px-4 transition-colors duration-200'>
-            <div class='max-w-4xl mx-auto'>$content</div>
-        </body></html>";
+    <!DOCTYPE html>
+    <html lang='ru'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Экзегетический Дневник</title>
+        <script src='https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4'></script>
+        <script src='https://unpkg.com/htmx.org@1.9.10'></script>
+        <script defer src='https://unpkg.com/@alpinejs/collapse@3.x.x/dist/cdn.min.js'></script>
+        <script defer src='https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js'></script>
+        <style>
+            .note-item { font-size: 13px; border-radius: 6px; padding: 6px 12px; margin-top: 4px; border-left-width: 4px; }
+            .verse-note { background-color: #f0fdf4; border-left-color: #22c55e; color: #166534; }
+            .chapter-note { background-color: #fef9c3; border-left-color: #eab308; color: #713f12; font-size: 14px; padding: 10px; border-radius: 8px; }
+            .friend-note { background-color: #f3e8ff; border-left-color: #a855f7; color: #581c87; }
+            .dark .verse-note { background-color: rgba(34, 197, 94, 0.15) !important; border-left-color: #4ade80 !important; color: #86efac !important; }
+            .dark .chapter-note { background-color: rgba(234, 179, 8, 0.15) !important; border-left-color: #fde047 !important; color: #fef08a !important; }
+            .dark .friend-note { background-color: rgba(168, 85, 247, 0.15) !important; border-left-color: #c084fc !important; color: #e9d5ff !important; }
+            
+            /* МАГИЧЕСКИЙ КАСКАД: Если у body есть класс hide-friends, скрываем заметки друзей */
+            .hide-friends .friend-note { display: none !important; }
+        </style>
+    </head>
+    <body x-data=\"{ 
+        darkMode: localStorage.getItem('darkMode') === 'true', 
+        showFriends: localStorage.getItem('showFriends') !== 'false',
+        toggleDark() { this.darkMode = !this.darkMode; localStorage.setItem('darkMode', this.darkMode); },
+        toggleFriends() { this.showFriends = !this.showFriends; localStorage.setItem('showFriends', this.showFriends); }
+    }\" :class=\"(darkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800') + (showFriends ? '' : ' hide-friends')\" class='font-sans antialiased min-h-screen py-10 px-4 transition-colors duration-200'>
+        <div class='max-w-4xl mx-auto'>
+            
+            <header class='flex flex-col sm:flex-row justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-4 mb-6 gap-4'>
+                <div class='flex items-center space-x-2'>
+                    <span class='text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50'>📖 Экзегет.Дневник</span>
+                </div>
+                <div class='flex items-center space-x-3'>
+                    
+                    <button @click='toggleFriends()' 
+                            :class=\"showFriends ? 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800' : 'bg-slate-100 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'\" 
+                            class='px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer flex items-center space-x-1.5 select-none'>
+                        <span>👥 Заметки друзей:</span>
+                        <span x-text=\"showFriends ? 'Показаны' : 'Скрыты'\" class='font-bold'></span>
+                    </button>
+                    
+                    <button @click='toggleDark()' 
+                            class='px-3 py-1.5 text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer text-xs font-medium flex items-center space-x-1 hover:bg-slate-200 dark:hover:bg-slate-700/60 transition-colors select-none'>
+                        <span x-text=\"darkMode ? '☀️ Светлая' : '🌙 Тёмная'\"></span>
+                    </button>
+                    
+                </div>
+            </header>
+
+            $content
+            
+        </div>
+    </body></html>";
     }
 }
 
